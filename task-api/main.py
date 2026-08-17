@@ -1,7 +1,13 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
-app = FastAPI()
+
+app = FastAPI(
+    title="Task API",
+    version="1.0",
+    description="A small CRUD API for managing tasks."
+)
 
 
 tasks = [
@@ -11,7 +17,20 @@ tasks = [
 ]
 
 
-@app.get("/")
+class TaskCreate(BaseModel):
+    title: str
+
+
+class TaskUpdate(BaseModel):
+    title: str | None = None
+    done: bool | None = None
+
+
+@app.get(
+    "/",
+    summary="API information",
+    description="Returns basic information about the Task API."
+)
 def root():
     return {
         "name": "Task API",
@@ -20,17 +39,29 @@ def root():
     }
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    summary="Health check",
+    description="Checks whether the API is running."
+)
 def health():
     return {"status": "ok"}
 
 
-@app.get("/tasks")
+@app.get(
+    "/tasks",
+    summary="List all tasks",
+    description="Returns all tasks."
+)
 def get_tasks():
     return tasks
 
 
-@app.get("/tasks/{task_id}")
+@app.get(
+    "/tasks/{task_id}",
+    summary="Get one task",
+    description="Returns a task by its ID."
+)
 def get_task(task_id: int):
     for task in tasks:
         if task["id"] == task_id:
@@ -42,35 +73,24 @@ def get_task(task_id: int):
     )
 
 
-@app.post("/tasks", status_code=201)
-async def create_task(request: Request):
-    try:
-        data = await request.json()
-    except Exception:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "Invalid JSON body"}
-        )
-
-    if not isinstance(data, dict):
-        return JSONResponse(
-            status_code=400,
-            content={"error": "Request body must be a JSON object"}
-        )
-
-    title = data.get("title")
-
-    if not isinstance(title, str) or not title.strip():
+@app.post(
+    "/tasks",
+    status_code=201,
+    summary="Create a task",
+    description="Creates a new task."
+)
+def create_task(task: TaskCreate):
+    if not task.title.strip():
         return JSONResponse(
             status_code=400,
             content={"error": "Title is required and cannot be empty"}
         )
 
-    new_id = max([task["id"] for task in tasks], default=0) + 1
+    new_id = max([t["id"] for t in tasks], default=0) + 1
 
     new_task = {
         "id": new_id,
-        "title": title.strip(),
+        "title": task.title.strip(),
         "done": False
     }
 
@@ -79,44 +99,34 @@ async def create_task(request: Request):
     return new_task
 
 
-@app.put("/tasks/{task_id}")
-async def update_task(task_id: int, request: Request):
-    for task in tasks:
-        if task["id"] == task_id:
+@app.put(
+    "/tasks/{task_id}",
+    summary="Update a task",
+    description="Updates the title and/or done status of a task."
+)
+def update_task(task_id: int, task: TaskUpdate):
+    for existing_task in tasks:
+        if existing_task["id"] == task_id:
 
-            try:
-                data = await request.json()
-            except Exception:
+            if task.title is None and task.done is None:
                 return JSONResponse(
                     status_code=400,
-                    content={"error": "Invalid JSON body"}
+                    content={"error": "Request body cannot be empty"}
                 )
 
-            if not isinstance(data, dict):
-                return JSONResponse(
-                    status_code=400,
-                    content={"error": "Request body must be a JSON object"}
-                )
+            if task.title is not None:
+                if not task.title.strip():
+                    return JSONResponse(
+                        status_code=400,
+                        content={"error": "Title is required and cannot be empty"}
+                    )
 
-            title = data.get("title", task["title"])
-            done = data.get("done", task["done"])
+                existing_task["title"] = task.title.strip()
 
-            if not isinstance(title, str) or not title.strip():
-                return JSONResponse(
-                    status_code=400,
-                    content={"error": "Title is required and cannot be empty"}
-                )
+            if task.done is not None:
+                existing_task["done"] = task.done
 
-            if not isinstance(done, bool):
-                return JSONResponse(
-                    status_code=400,
-                    content={"error": "Done must be true or false"}
-                )
-
-            task["title"] = title.strip()
-            task["done"] = done
-
-            return task
+            return existing_task
 
     return JSONResponse(
         status_code=404,
@@ -124,7 +134,12 @@ async def update_task(task_id: int, request: Request):
     )
 
 
-@app.delete("/tasks/{task_id}", status_code=204)
+@app.delete(
+    "/tasks/{task_id}",
+    status_code=204,
+    summary="Delete a task",
+    description="Deletes a task by its ID."
+)
 def delete_task(task_id: int):
     for index, task in enumerate(tasks):
         if task["id"] == task_id:
