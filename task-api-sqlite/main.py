@@ -137,17 +137,24 @@ def create_task(task: TaskCreate):
             content={"error": "Title is required and cannot be empty"}
         )
 
-    new_id = max([t["id"] for t in tasks], default=0) + 1
+    conn = sqlite3.connect(DB_NAME)
 
-    new_task = {
+    cursor = conn.execute(
+        "INSERT INTO tasks (title, done) VALUES (?, ?)",
+        (task.title.strip(), 0)
+    )
+
+    new_id = cursor.lastrowid
+
+    conn.commit()
+
+    conn.close()
+
+    return {
         "id": new_id,
         "title": task.title.strip(),
         "done": False
     }
-
-    tasks.append(new_task)
-
-    return new_task
 
 
 @app.put(
